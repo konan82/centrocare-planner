@@ -9,8 +9,12 @@ create table if not exists public.access_logs (
   login_time timestamptz not null default now(),
   logout_time timestamptz,
   ip_address text,
-  user_agent text
+  user_agent text,
+  logout_reason text
 );
+
+-- Presente solo su installazioni gia' esistenti (aggiunta manualmente su prod).
+alter table public.access_logs add column if not exists logout_reason text;
 
 create index if not exists access_logs_user_idx on public.access_logs(user_id);
 create index if not exists access_logs_login_idx on public.access_logs(login_time desc);
