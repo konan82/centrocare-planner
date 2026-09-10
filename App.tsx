@@ -44,6 +44,7 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   ClipboardCheck,
   MousePointer2,
   MessageCircle,
@@ -60,7 +61,8 @@ import {
   History,
   List,
   GripVertical,
-  Copy
+  Copy,
+  LayoutDashboard
 } from 'lucide-react';
 import { Tutor, Youth, Shift, ViewState, User, PaySettings, PermMatrix, PermFlags, AccessLogEntry } from './types';
 import { toPng } from 'html-to-image';
@@ -512,7 +514,7 @@ const GuideButton: React.FC<GuideButtonProps> = ({ title, intro, items }) => {
         <BookOpen size={16} />
         Guida
       </button>
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={title} size="lg">
+      <Modal isOpen={open} onClose={() => setOpen(false)} title={title} size="lg" icon={<BookOpen size={20} />}>
         <div className="space-y-5 text-[15px] text-slate-800 leading-relaxed">
           {intro && <p>{intro}</p>}
           <div className="space-y-3">
@@ -632,19 +634,23 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
   size?: 'md' | 'lg' | 'xl';
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, children, size = 'md' }) => {
   if (!isOpen) return null;
   const widthCls = size === 'xl' ? 'max-w-4xl' : size === 'lg' ? 'max-w-2xl' : 'max-w-md';
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-0 sm:p-4">
       <div className={`bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full ${widthCls} overflow-hidden animate-fadeIn sm:max-h-[90vh] max-h-[92dvh]`}>
         <div className="flex justify-between items-center px-5 sm:px-6 py-3.5 sm:py-4 border-b bg-teal-600 text-white">
-          <h3 className="font-semibold text-lg sm:text-xl leading-tight">{title}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"><X size={22} /></button>
+          <h3 className="flex-1 min-w-0 flex items-center gap-2.5 font-semibold text-lg sm:text-xl leading-tight">
+            {icon && <span className="shrink-0 flex items-center">{icon}</span>}
+            <span className="truncate">{title}</span>
+          </h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors shrink-0"><X size={22} /></button>
         </div>
         <div className="p-5 sm:p-7 text-slate-900 max-h-[calc(92dvh-4rem)] overflow-y-auto">
           {children}
@@ -1775,6 +1781,11 @@ function App() {
   const [summaryTutorFilter, setSummaryTutorFilter] = useState<string>('all');
   const [summaryYouthFilter, setSummaryYouthFilter] = useState<string>('all');
   const [summaryMonth, setSummaryMonth] = useState(() => startOfMonth(new Date()));
+  const [kpiMonth, setKpiMonth] = useState(() => startOfMonth(new Date()));
+  const [kpiShowPending, setKpiShowPending] = useState(false);
+  const [kpiShowCancelled, setKpiShowCancelled] = useState(false);
+  const [kpiYouthSort, setKpiYouthSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [kpiTutorSort, setKpiTutorSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
 
   // Payroll (Calcolo Paga) State
   const [payRates, setPayRates] = useState<PaySettings>({ rateSingle: 0, rateDouble: 0, weeksPerMonth: 4 });
@@ -2396,6 +2407,26 @@ function App() {
     setEditingShift(shift);
     setShiftModalMode(mode);
     setIsShiftModalOpen(true);
+  };
+
+  // "Registra Turno" dai turni da registrare (Panoramica): apre la scheda consuntivo precompilata
+  const openRegisterPendingShift = (p: { date: string; template: Shift }) => {
+    const youthIds = shiftYouthIds(p.template);
+    setEditingShift({
+      tutorId: p.template.tutorId,
+      youthId: youthIds[0] || '',
+      youthIds,
+      date: p.date,
+      startTime: p.template.startTime,
+      endTime: p.template.endTime,
+      activity: p.template.activity || 'Attività generica',
+      status: 'pianificato',
+      isTemplate: false,
+      templateShiftId: p.template.id,
+    });
+    setShiftModalMode('validate');
+    setIsShiftModalOpen(true);
+    setKpiShowPending(false);
   };
 
   const finishDragCreate = () => {
@@ -3165,6 +3196,7 @@ function App() {
       { view: 'TUTORS', perm: 'TUTORS', label: 'Gestione Tutor', icon: UserCheck, chipText: 'text-sky-600' },
       { view: 'YOUTHS', perm: 'YOUTHS', label: 'Anagrafica Ragazzi', icon: Users, chipText: 'text-amber-600' },
       { view: 'SUMMARY', perm: 'SUMMARY', label: 'Riepilogo Ore', icon: BarChart3, chipText: 'text-rose-600' },
+      { view: 'OVERVIEW', perm: 'SUMMARY', label: 'Panoramica', icon: LayoutDashboard, chipText: 'text-emerald-600' },
       { view: 'PAYROLL', perm: 'SUMMARY', label: 'Calcolo Paga', icon: Wallet, chipText: 'text-lime-600' },
       { view: 'GUIDE', perm: 'PIANIFICAZIONE', label: 'Guida d\'uso', icon: BookOpen, chipText: 'text-teal-600' },
     ];
@@ -3336,6 +3368,7 @@ function App() {
       : view === 'TUTORS' ? 'Gestione Tutor'
       : view === 'YOUTHS' ? 'Anagrafica Ragazzi'
       : view === 'SUMMARY' ? 'Riepilogo Ore'
+      : view === 'OVERVIEW' ? 'Panoramica'
       : view === 'PAYROLL' ? 'Calcolo Paga'
       : view === 'USER_MANAGEMENT' ? 'Gestione Utenti'
       : view === 'AUDIT' ? 'Audit Trail'
@@ -6971,6 +7004,707 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
     );
   };
 
+  const renderOverview = () => {
+    const getHours = (start: string, end: string) => {
+      const [sh, sm] = (start || '0:00').split(':').map(Number);
+      const [eh, em] = (end || '0:0').split(':').map(Number);
+      return ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+    };
+    const toMin = (t: string) => { const [hh, mm] = (t || '0:0').split(':').map(Number); return (hh || 0) * 60 + (mm || 0); };
+    const weeks = payRates.weeksPerMonth || 1;
+    const rs = payRates.rateSingle || 0;
+    const rd = payRates.rateDouble || 0;
+
+    const monthMetrics = (m: Date) => {
+      const ms = format(startOfMonth(m), 'yyyy-MM-dd');
+      const me = format(endOfMonth(m), 'yyyy-MM-dd');
+      const templates = shifts.filter(s => s.isTemplate && !!s.date);
+      const monthShifts = shifts.filter(s => {
+        if (s.isTemplate || !s.date) return false;
+        const d = typeof s.date === 'string' ? s.date.split('T')[0] : s.date;
+        return d >= ms && d <= me;
+      });
+      const templateMonthlyCount = (t: Shift) => {
+        const wd = Math.min(Math.max((t.templateWeekday || weekdayOf(t.date)) - 1, 0), 5) + 1;
+        let count = 0;
+        for (let d = parseISO(ms); format(d, 'yyyy-MM-dd') <= me; d = addDays(d, 1)) {
+          if (getDay(d) === wd) count++;
+        }
+        return count;
+      };
+      const tPlanned = new Map<string, number>();
+      const tDelta = new Map<string, number>();
+      templates.forEach(s => {
+        const h = getHours(s.startTime, s.endTime) * templateMonthlyCount(s);
+        tPlanned.set(s.tutorId, (tPlanned.get(s.tutorId) || 0) + h);
+      });
+      monthShifts.forEach(s => {
+        const diff = getValidatedHours(s) - getHours(s.startTime, s.endTime);
+        tDelta.set(s.tutorId, (tDelta.get(s.tutorId) || 0) + diff);
+      });
+      const yWeekly = new Map<string, number>();
+      templates.forEach(s => {
+        const h = getHours(s.startTime, s.endTime);
+        shiftYouthIds(s).forEach(yid => {
+          yWeekly.set(yid, (yWeekly.get(yid) || 0) + h);
+        });
+      });
+
+      const payRows = tutors.map(t => {
+        const intervals = templates
+          .filter(s => s.tutorId === t.id)
+          .map(s => {
+            const h = getHours(s.startTime, s.endTime);
+            if (h <= 0) return null;
+            return {
+              wd: s.templateWeekday || weekdayOf(s.date),
+              startMin: toMin(s.startTime),
+              endMin: toMin(s.endTime),
+              youths: new Set(shiftYouthIds(s)),
+              weeks: s.durationWeeks && s.durationWeeks > 0 ? s.durationWeeks : weeks,
+            };
+          })
+          .filter((x): x is { wd: number; startMin: number; endMin: number; youths: Set<string>; weeks: number } => x !== null);
+        const slotKey = (iv: { wd: number; startMin: number; endMin: number; youths: Set<string>; weeks: number }) => `${iv.wd}|${iv.startMin}|${iv.endMin}`;
+        const slotMap = new Map<string, typeof intervals>();
+        intervals.forEach(iv => {
+          const k = slotKey(iv);
+          const arr = slotMap.get(k);
+          if (arr) arr.push(iv);
+          else slotMap.set(k, [iv]);
+        });
+        let singleH = 0, doubleH = 0, pay = 0;
+        slotMap.forEach(g => {
+          const thresholds = Array.from(new Set(g.map(x => x.weeks))).sort((a, b) => b - a);
+          const slotH = (g[0].endMin - g[0].startMin) / 60;
+          thresholds.forEach((th, idx) => {
+            const next = idx + 1 < thresholds.length ? thresholds[idx + 1] : 0;
+            const dur = th - next;
+            if (dur <= 0) return;
+            const active = g.filter(x => x.weeks >= th);
+            const yc = new Set<string>();
+            active.forEach(x => x.youths.forEach(y => yc.add(y)));
+            if (yc.size >= 2) { doubleH += slotH * dur; pay += slotH * rd * dur; }
+            else { singleH += slotH * dur; pay += slotH * rs * dur; }
+          });
+        });
+        return { t, singleH, doubleH, pay };
+      });
+
+      const tutorIds = new Set([...tPlanned.keys(), ...tDelta.keys()]);
+      const tutorRows = tutors
+        .filter(tut => tutorIds.has(tut.id))
+        .map(tut => {
+          const planned = tPlanned.get(tut.id) || 0;
+          const executed = Math.max(0, planned + (tDelta.get(tut.id) || 0));
+          const pr = payRows.find(p => p.t.id === tut.id) || { t: tut, singleH: 0, doubleH: 0, pay: 0 };
+          return { tutor: tut, planned, executed, singleH: pr.singleH, doubleH: pr.doubleH, pay: pr.pay };
+        })
+        .sort((a, b) => a.tutor.name.localeCompare(b.tutor.name, 'it', { sensitivity: 'base' }));
+
+      const youthRows = youths
+        .map(y => {
+          const weeklyPlanned = yWeekly.get(y.id) || 0;
+          const required = y.requiredHoursPerWeek || 0;
+          return {
+            youth: y,
+            required,
+            weeklyPlanned,
+            gap: required - weeklyPlanned,
+          };
+        })
+        .filter(r => r.weeklyPlanned > 0)
+        .sort((a, b) => a.youth.name.localeCompare(b.youth.name, 'it', { sensitivity: 'base' }));
+
+      const byTutorDay = new Map<string, Array<{ start: number; end: number; youths: Set<string> }>>();
+      templates.forEach(s => {
+        const wd = s.templateWeekday || weekdayOf(s.date);
+        const key = `${s.tutorId}|${wd}`;
+        const arr = byTutorDay.get(key) || [];
+        arr.push({ start: toMin(s.startTime), end: toMin(s.endTime), youths: new Set(shiftYouthIds(s)) });
+        byTutorDay.set(key, arr);
+      });
+      const conflicts: Array<{ tutorId: string; count: number }> = [];
+      byTutorDay.forEach((arr, key) => {
+        if (arr.length < 2) return;
+        let overlaps = 0;
+        for (let i = 0; i < arr.length; i++) {
+          for (let j = i + 1; j < arr.length; j++) {
+            const a = arr[i], b = arr[j];
+            const timeOverlap = a.start < b.end && b.start < a.end;
+            if (!timeOverlap) continue;
+            const shared = Array.from(a.youths).some(y => b.youths.has(y));
+            if (shared) overlaps++;
+          }
+        }
+        if (overlaps > 0) {
+          const tutorId = key.split('|')[0];
+          conflicts.push({ tutorId, count: overlaps });
+        }
+      });
+      const pending: Array<{ date: string; template: Shift }> = [];
+      templates.forEach(t => {
+        const wd = t.templateWeekday || weekdayOf(t.date);
+        for (let d = parseISO(ms); format(d, 'yyyy-MM-dd') <= me; d = addDays(d, 1)) {
+          if (getDay(d) !== wd) continue;
+          const ds = format(d, 'yyyy-MM-dd');
+          const exists = monthShifts.some(s => !s.isTemplate && s.templateShiftId === t.id && s.date === ds);
+          if (!exists) pending.push({ date: ds, template: t });
+        }
+      });
+      pending.sort((a, b) => a.date.localeCompare(b.date));
+
+      const plannedTotal = tutorRows.reduce((a, r) => a + r.planned, 0);
+      const executedTotal = tutorRows.reduce((a, r) => a + r.executed, 0);
+      const plannedOccurrences = templates.reduce((a, t) => a + templateMonthlyCount(t), 0);
+      const recorded = monthShifts.length;
+      const completionPct = plannedOccurrences > 0 ? (recorded / plannedOccurrences) * 100 : 0;
+      const cancelledList = monthShifts.filter(s => s.status === 'cancellato');
+      const cancelledHours = cancelledList.reduce((a, s) => a + getHours(s.startTime, s.endTime), 0);
+      const doubleHours = payRows.reduce((a, r) => a + r.doubleH, 0);
+      const singleHours = payRows.reduce((a, r) => a + r.singleH, 0);
+      const payBase = payRows.reduce((a, r) => a + r.pay, 0);
+      return {
+        plannedTotal, executedTotal, plannedOccurrences, recorded, completionPct,
+        cancelledCount: cancelledList.length, cancelledHours, doubleHours, singleHours, payBase,
+        tutorRows, youthRows, conflicts, pending, cancelledShifts: cancelledList,
+      };
+    };
+
+    const cur = monthMetrics(kpiMonth);
+    const prev = monthMetrics(addMonths(kpiMonth, -1));
+    const deltaPct = (c: number, p: number) => (p === 0 ? null : ((c - p) / p) * 100);
+
+    const tones: Record<string, { text: string; badge: string; bar: string }> = {
+      emerald: { text: 'text-emerald-600', badge: 'bg-gradient-to-br from-emerald-500 to-teal-600', bar: 'bg-emerald-500' },
+      rose: { text: 'text-rose-600', badge: 'bg-gradient-to-br from-rose-500 to-pink-600', bar: 'bg-rose-500' },
+      sky: { text: 'text-sky-600', badge: 'bg-gradient-to-br from-sky-500 to-blue-600', bar: 'bg-sky-500' },
+      violet: { text: 'text-violet-600', badge: 'bg-gradient-to-br from-violet-500 to-purple-600', bar: 'bg-violet-500' },
+      amber: { text: 'text-amber-600', badge: 'bg-gradient-to-br from-amber-500 to-orange-600', bar: 'bg-amber-500' },
+    };
+
+    const StatCard: React.FC<{ label: string; value: string; tone: string; icon: React.ElementType; sub?: React.ReactNode; delta?: number | null; deltaLabel?: string }> = ({ label, value, tone, icon: Icon, sub, delta, deltaLabel }) => {
+      const up = delta !== null && delta !== undefined && delta >= 0;
+      return (
+        <Card className="p-4 relative overflow-hidden">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
+              <p className={`mt-1 text-2xl font-black tabular-nums ${tones[tone].text}`}>{value}</p>
+            </div>
+            <div className={`p-2 rounded-xl text-white shadow-md ${tones[tone].badge} shrink-0`}>
+              <Icon size={18} />
+            </div>
+          </div>
+          {sub && <div className="mt-2 text-xs text-slate-500">{sub}</div>}
+          {delta !== null && delta !== undefined && deltaLabel && (
+            <div className={`mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold ${up ? 'text-emerald-600' : 'text-rose-500'}`}>
+              {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {up ? '+' : ''}{delta.toFixed(1)}% <span className="text-slate-400 font-medium">vs {deltaLabel}</span>
+            </div>
+          )}
+        </Card>
+      );
+    };
+
+    const ProgressBar = ({ pct, tone }: { pct: number; tone: string }) => (
+      <div className="mt-1.5 h-2 rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 overflow-hidden">
+        <div className={`h-full rounded-full ${tones[tone].bar}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      </div>
+    );
+
+    const cardLabel = 'text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3';
+
+    const sortRows = <T,>(rows: T[], key: string, dir: 'asc' | 'desc', get: (r: T) => number | string): T[] => {
+      const k = [...rows];
+      k.sort((a, b) => {
+        const av = get(a);
+        const bv = get(b);
+        let cmp: number;
+        if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+        else cmp = String(av).localeCompare(String(bv), 'it', { sensitivity: 'base' });
+        return dir === 'asc' ? cmp : -cmp;
+      });
+      return k;
+    };
+    const youthAccess = (r: { youth: Youth; required: number; weeklyPlanned: number; gap: number }, key: string): number | string => {
+      if (key === 'name') return r.youth.name;
+      if (key === 'required') return r.required;
+      if (key === 'weeklyPlanned') return r.weeklyPlanned;
+      return r.gap;
+    };
+    const tutorAccess = (r: { tutor: Tutor; planned: number; executed: number; singleH: number; doubleH: number; pay: number }, key: string): number | string => {
+      if (key === 'name') return r.tutor.name;
+      if (key === 'planned') return r.planned;
+      if (key === 'executed') return r.executed;
+      if (key === 'doubleH') return r.doubleH;
+      return r.pay;
+    };
+    const toggleYouthSort = (key: string) => setKpiYouthSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+    const toggleTutorSort = (key: string) => setKpiTutorSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+    const SortTh: React.FC<{ label: string; active: boolean; dir: 'asc' | 'desc'; align?: 'left' | 'right'; onClick: () => void }> = ({ label, active, dir, align = 'left', onClick }) => (
+      <th className={`py-2 ${align === 'right' ? 'px-2 text-right' : 'pr-3 text-left'} font-bold`}>
+        <button
+          onClick={onClick}
+          title={active ? (dir === 'asc' ? 'Clicca per ordinare decrescente' : 'Clicca per ordinare crescente') : 'Clicca per ordinare'}
+          className={`inline-flex items-center gap-1 uppercase hover:text-teal-600 transition-colors ${active ? 'text-teal-600' : ''}`}
+        >
+          {label}
+          {active ? (dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : <ChevronsUpDown size={12} className="text-slate-300" />}
+        </button>
+      </th>
+    );
+
+    return (
+      <div className="space-y-3 md:space-y-4">
+        <div className="rounded-2xl bg-white shadow-md ring-1 ring-slate-200">
+          <div className="h-1.5 rounded-t-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-400"></div>
+          <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center px-4 sm:px-5 py-3 sm:py-4 gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-2.5 rounded-xl text-white shadow-md shrink-0 bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200">
+                <LayoutDashboard size={18} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-800 tracking-tight leading-tight">Panoramica</h2>
+                <p className="text-sm sm:text-base text-slate-600 font-medium leading-snug">
+                  KPI mensili · ore vs pianificato, copertura ragazzi, compensi e conflitti
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                onClick={() => setKpiMonth(addMonths(kpiMonth, -1))}
+                title="Mese precedente"
+                className="p-3 md:p-3.5 rounded-xl md:rounded-2xl border-2 border-slate-200 bg-white shadow-sm md:shadow-md hover:bg-emerald-50 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-lg active:scale-95 transition-all text-slate-600"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button
+                onClick={() => setKpiMonth(startOfMonth(new Date()))}
+                title="Torna al mese corrente"
+                className={`px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold shadow-sm md:shadow-md transition-all ${
+                  isSameMonth(kpiMonth, new Date())
+                    ? 'text-emerald-700 bg-gradient-to-br from-emerald-50 to-white border-2 border-emerald-400 shadow-emerald-100'
+                    : 'text-slate-700 border-2 border-slate-200 bg-white hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 md:gap-2">
+                  <CalendarIcon size={14} className="text-emerald-600 shrink-0" />
+                  <span className="tracking-tight whitespace-nowrap capitalize">{format(kpiMonth, 'MMMM yyyy', { locale: it })}</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setKpiMonth(addMonths(kpiMonth, 1))}
+                title="Mese successivo"
+                className="p-3 md:p-3.5 rounded-xl md:rounded-2xl border-2 border-slate-200 bg-white shadow-sm md:shadow-md hover:bg-emerald-50 hover:border-emerald-400 hover:text-emerald-700 hover:shadow-lg active:scale-95 transition-all text-slate-600"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+          <StatCard
+            label="Ore erogate · mese"
+            value={`${cur.executedTotal.toFixed(1)}h`}
+            tone="emerald"
+            icon={Play}
+            delta={deltaPct(cur.executedTotal, prev.executedTotal)}
+            deltaLabel="mese prec."
+            sub={
+              <>
+                <span className="text-amber-600 font-semibold">Pianificate {cur.plannedTotal.toFixed(1)}h</span>
+                <ProgressBar pct={cur.plannedTotal > 0 ? (cur.executedTotal / cur.plannedTotal) * 100 : 0} tone="emerald" />
+              </>
+            }
+          />
+          <StatCard
+            label="Consuntivo completato"
+            value={`${cur.completionPct.toFixed(0)}%`}
+            tone="sky"
+            icon={ClipboardCheck}
+            sub={
+              <>
+                <button
+                  onClick={() => setKpiShowPending(true)}
+                  disabled={cur.pending.length === 0}
+                  title="Clicca per vedere l'elenco dei turni pianificati non ancora registrati nel Consuntivo"
+                  className={`font-semibold underline decoration-dotted underline-offset-2 ${cur.pending.length > 0 ? 'text-amber-600 hover:text-amber-700 active:scale-95 transition-transform cursor-pointer' : 'text-slate-400 cursor-default'}`}
+                >
+                  {cur.pending.length} da registrare ▶
+                </button>
+                <span className="text-slate-400"> · {cur.recorded}/{cur.plannedOccurrences} registrati</span>
+                <ProgressBar pct={cur.completionPct} tone="sky" />
+                <p className="mt-2 text-[10px] leading-snug text-slate-400">
+                  % = turni registrati nel Consuntivo ÷ occorrenze della settimana tipo nel mese. Supera il 100% con turni extra o duplicati; i cancellati contano come registrati.
+                </p>
+              </>
+            }
+          />
+          <StatCard
+            label="Turni annullati"
+            value={`${cur.cancelledCount}`}
+            tone="rose"
+            icon={XCircle}
+            sub={
+              <>
+                <button
+                  onClick={() => setKpiShowCancelled(true)}
+                  disabled={cur.cancelledCount === 0}
+                  title="Clicca per vedere l'elenco dei turni annullati nel mese"
+                  className={`font-semibold underline decoration-dotted underline-offset-2 ${cur.cancelledCount > 0 ? 'text-rose-600 hover:text-rose-700 active:scale-95 transition-transform cursor-pointer' : 'text-slate-400 cursor-default'}`}
+                >
+                  {cur.cancelledCount} turni annullati ▶
+                </button>
+                {cur.cancelledCount > 0 && <span className="text-slate-400"> · {cur.cancelledHours.toFixed(1)}h perse</span>}
+              </>
+            }
+          />
+          <StatCard
+            label="Compenso lordo stimato"
+            value={`€ ${cur.payBase.toFixed(2)}`}
+            tone="violet"
+            icon={Wallet}
+            sub={
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">Ore singole · € {rs.toFixed(2)}/h</span>
+                  <span className="font-semibold text-violet-700 tabular-nums">{cur.singleHours.toFixed(1)}h → € {(cur.singleHours * rs).toFixed(0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">Ore doppie (≥2 ragazzi) · € {rd.toFixed(2)}/h</span>
+                  <span className="font-semibold text-violet-700 tabular-nums">{cur.doubleHours.toFixed(1)}h → € {(cur.doubleHours * rd).toFixed(0)}</span>
+                </div>
+                <p className="text-[10px] leading-snug text-slate-400">
+                  {rs <= 0 && rd <= 0
+                    ? 'Tariffe non configurate: imposta le rate singole/doppie in Calcolo Paga prima di affidarti alla stima.'
+                    : 'Stima = ore della settimana tipo estese al mese × tariffe Calcolo Paga. Verifica lì i conteggi finali.'}
+                </p>
+              </div>
+            }
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <Card className="p-4">
+            <h3 className={`${cardLabel} font-extrabold`}>Copertura ore ragazzi</h3>
+            {cur.youthRows.length === 0 ? (
+              <p className="text-slate-400 italic text-sm py-4 text-center">Nessun turno nel mese selezionato.</p>
+            ) : (
+              <div className="overflow-x-auto max-h-[52vh] overflow-y-auto">
+                <table className="w-full text-sm border-collapse whitespace-nowrap">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="text-[10px] uppercase tracking-wide text-slate-500 border-b-2 border-slate-200">
+                      <SortTh label="Ragazzo" active={kpiYouthSort.key === 'name'} dir={kpiYouthSort.dir} onClick={() => toggleYouthSort('name')} />
+                      <SortTh label="Fabbisogno/sett" align="right" active={kpiYouthSort.key === 'required'} dir={kpiYouthSort.dir} onClick={() => toggleYouthSort('required')} />
+                      <SortTh label="Pianif/sett" align="right" active={kpiYouthSort.key === 'weeklyPlanned'} dir={kpiYouthSort.dir} onClick={() => toggleYouthSort('weeklyPlanned')} />
+                      <SortTh label="Gap" align="right" active={kpiYouthSort.key === 'gap'} dir={kpiYouthSort.dir} onClick={() => toggleYouthSort('gap')} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortRows(cur.youthRows, kpiYouthSort.key, kpiYouthSort.dir, r => youthAccess(r, kpiYouthSort.key)).map(r => {
+                      const ok = r.gap <= 0.05;
+                      return (
+                        <tr key={r.youth.id} className="border-b border-slate-100">
+                          <td className="py-1.5 pr-3">
+                            <span className="flex items-center gap-1.5">
+                              <button
+                                onClick={(e) => goToYouthAgenda(r.youth, e as unknown as React.MouseEvent)}
+                                className={`h-5 w-5 rounded-full ${getYouthColor(r.youth.id, youths).bg} ${getYouthColor(r.youth.id, youths).text} text-[10px] font-bold flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-teal-400 transition`}
+                                title={`Apri l'agenda di ${r.youth.name}`}
+                              >
+                                {getInitials(r.youth.name)}
+                              </button>
+                              <button
+                                onClick={(e) => goToYouth(r.youth, e as unknown as React.MouseEvent)}
+                                className="truncate max-w-[9rem] font-medium cursor-pointer hover:text-teal-700 hover:underline"
+                                title={`Apri scheda ${r.youth.name}`}
+                              >
+                                {r.youth.name}
+                              </button>
+                            </span>
+                          </td>
+                          <td className="text-right px-2 py-1.5 tabular-nums text-slate-600">{r.required}h</td>
+                          <td className="text-right px-2 py-1.5 tabular-nums text-amber-600">{r.weeklyPlanned.toFixed(1)}h</td>
+                          <td className="text-right px-2 py-1.5">
+                            {ok ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600"><CheckCircle2 size={12} /> ok</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-500"><AlertCircle size={12} /> -{r.gap.toFixed(1)}h</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {cur.youthRows.length > 0 && (
+              <p className="mt-3 text-[11px] text-slate-400">Fabbisogno = ore settimanali richieste in anagrafica · Pianif/sett = settimana tipo · Gap = fabbisogno - ore pianificate (rosso = da coprire). Clicca sulle intestazioni per ordinare.</p>
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <h3 className={`${cardLabel} !mb-0 font-extrabold`}>Tutor · ore e compenso stimato</h3>
+            {cur.tutorRows.length === 0 ? (
+              <p className="text-slate-400 italic text-sm py-4 text-center mt-3">Nessun turno nel mese selezionato.</p>
+            ) : (
+              <div className="overflow-x-auto max-h-[52vh] overflow-y-auto mt-3">
+                <table className="w-full text-sm border-collapse whitespace-nowrap">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="text-[10px] uppercase tracking-wide text-slate-500 border-b-2 border-slate-200">
+                      <SortTh label="Tutor" active={kpiTutorSort.key === 'name'} dir={kpiTutorSort.dir} onClick={() => toggleTutorSort('name')} />
+                      <SortTh label="Pianif" align="right" active={kpiTutorSort.key === 'planned'} dir={kpiTutorSort.dir} onClick={() => toggleTutorSort('planned')} />
+                      <SortTh label="Erogate" align="right" active={kpiTutorSort.key === 'executed'} dir={kpiTutorSort.dir} onClick={() => toggleTutorSort('executed')} />
+                      <SortTh label="Doppie" align="right" active={kpiTutorSort.key === 'doubleH'} dir={kpiTutorSort.dir} onClick={() => toggleTutorSort('doubleH')} />
+                      <SortTh label="Stimato" align="right" active={kpiTutorSort.key === 'pay'} dir={kpiTutorSort.dir} onClick={() => toggleTutorSort('pay')} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortRows(cur.tutorRows, kpiTutorSort.key, kpiTutorSort.dir, r => tutorAccess(r, kpiTutorSort.key)).map(r => (
+                      <tr key={r.tutor.id} className="border-b border-slate-100">
+                        <td className="py-1.5 pr-3">
+                          <span className="flex items-center gap-1.5">
+                            <button
+                              onClick={(e) => goToTutorAgenda(r.tutor, e as unknown as React.MouseEvent)}
+                              className={`h-5 w-5 rounded-full ${getTutorColor(r.tutor.id, tutors).bg} ${getTutorColor(r.tutor.id, tutors).text} text-[10px] font-bold flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-teal-400 transition`}
+                              title={`Apri l'agenda di ${r.tutor.name}`}
+                            >
+                              {getInitials(r.tutor.name)}
+                            </button>
+                            <button
+                              onClick={(e) => goToTutor(r.tutor, e as unknown as React.MouseEvent)}
+                              className="truncate max-w-[9rem] font-medium cursor-pointer hover:text-teal-700 hover:underline"
+                              title={`Apri scheda ${r.tutor.name}`}
+                            >
+                              {r.tutor.name}
+                            </button>
+                          </span>
+                        </td>
+                        <td className="text-right px-2 py-1.5 tabular-nums text-amber-600">{r.planned.toFixed(1)}h</td>
+                        <td className="text-right px-2 py-1.5 tabular-nums text-blue-700">{r.executed.toFixed(1)}h</td>
+                        <td className="text-right px-2 py-1.5 tabular-nums text-violet-600">{r.doubleH.toFixed(1)}h</td>
+                        <td className="text-right px-2 py-1.5 tabular-nums font-bold text-slate-700">€ {r.pay.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {cur.tutorRows.length > 0 && (
+              <p className="mt-3 text-[11px] text-slate-400">Pianif/Erogate = ore mensili (settimana tipo espansa, variazioni consuntivo incluse) · Doppie = minuti con ≥2 ragazzi · Stimato = lordo dalle tariffe di Calcolo Paga. Clicca sulle intestazioni per ordinare.</p>
+            )}
+          </Card>
+        </div>
+
+        <Card className="p-4">
+          <h3 className={`${cardLabel} font-extrabold`}>Sovrapposizioni pianificate</h3>
+          {cur.conflicts.length === 0 ? (
+            <p className="flex items-center gap-2 text-sm text-emerald-600 font-semibold py-2">
+              <CheckCircle2 size={16} /> Nessuna sovrapposizione dello stesso tutor nello stesso giorno.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {cur.conflicts.map(c => {
+                const t = tutors.find(x => x.id === c.tutorId);
+                const tc = getTutorColor(c.tutorId, tutors);
+                return (
+                  <span key={c.tutorId} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${tc.bg} ${tc.text} border ${tc.border} border-l-4`}>
+                    {t?.name || c.tutorId}
+                    <span className="bg-white/70 rounded-full px-2 py-0.5 text-rose-600">{c.count} sovrapp.</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-slate-400">Conflitti = due o più turni della settimana tipo con lo stesso tutor, nello stesso giorno, con fasce orarie sovrapposte <span className="font-semibold text-rose-500">per gli stessi ragazzi</span> (lo stesso ragazzo prenotato due volte). Turni paralleli con ragazzi diversi non contano.</p>
+        </Card>
+
+        {kpiShowPending && (
+          <div className="fixed inset-0 z-[90] bg-black/40 flex items-center justify-center p-4" onClick={() => setKpiShowPending(false)}>
+            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl ring-1 ring-slate-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800">Turni da registrare</h3>
+                  <p className="text-xs text-slate-500 capitalize">{format(kpiMonth, 'MMMM yyyy', { locale: it })} · {cur.pending.length} turni pianificati senza corrispettivo nel Consuntivo</p>
+                </div>
+                <button onClick={() => setKpiShowPending(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 shrink-0" title="Chiudi"><X size={18} /></button>
+              </div>
+              <div className="overflow-y-auto px-5 py-3">
+                {cur.pending.length === 0 ? (
+                  <p className="text-center text-slate-400 italic py-8">Tutto registrato.</p>
+                ) : (
+                  <table className="w-full text-sm border-collapse whitespace-nowrap">
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="text-[10px] uppercase tracking-wide text-slate-500 border-b-2 border-slate-200">
+                        <th className="text-left py-2 pr-3 font-bold">Data</th>
+                        <th className="text-left py-2 pr-3 font-bold">Tutor</th>
+                        <th className="text-left py-2 pr-3 font-bold">Ragazzo/i</th>
+                        <th className="text-left py-2 pr-3 font-bold">Fascia</th>
+                        <th className="text-left py-2 font-bold">Attività</th>
+                        <th className="text-right py-2 font-bold">Azione</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cur.pending.map((p, i) => {
+                        const t = tutors.find(x => x.id === p.template.tutorId);
+                        const tc = getTutorColor(p.template.tutorId, tutors);
+                        return (
+                          <tr key={i} className="border-b border-slate-100">
+                            <td className="py-1.5 pr-3 font-semibold text-slate-700 capitalize">{format(parseISO(p.date), 'EEE d MMM', { locale: it })}</td>
+                            <td className="py-1.5 pr-3">
+                              <span className="inline-flex items-center gap-1.5">
+                                <button
+                                  onClick={(e) => goToTutorAgenda(t, e as unknown as React.MouseEvent)}
+                                  className={`h-5 w-5 rounded-full ${tc.bg} ${tc.text} text-[10px] font-bold flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-teal-400 transition`}
+                                  title={`Apri l'agenda di ${t?.name || 'tutor'}`}
+                                >
+                                  {getInitials(t?.name)}
+                                </button>
+                                <button
+                                  onClick={(e) => goToTutor(t, e as unknown as React.MouseEvent)}
+                                  className="max-w-[8rem] truncate font-medium cursor-pointer hover:text-teal-700 hover:underline"
+                                  title={`Apri scheda ${t?.name || 'tutor'}`}
+                                >
+                                  {t?.name || '—'}
+                                </button>
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <span className="flex flex-wrap gap-1">
+                                {shiftYouthIds(p.template).map(yid => {
+                                  const y = youths.find(x => x.id === yid);
+                                  const yc = getYouthColor(yid, youths);
+                                  return (
+                                    <button
+                                      key={yid}
+                                      onClick={(e) => goToYouth(y, e as unknown as React.MouseEvent)}
+                                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${yc.bg} ${yc.text} hover:ring-2 hover:ring-teal-400 cursor-pointer transition`}
+                                      title={`Apri scheda ${y?.name || 'ragazzo'}`}
+                                    >
+                                      {y?.name || '—'}
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{p.template.startTime}–{p.template.endTime}</td>
+                            <td className="py-1.5 font-medium text-slate-600 max-w-[10rem] truncate">{p.template.activity}</td>
+                            <td className="py-1.5 pl-3 text-right">
+                              <button
+                                onClick={() => openRegisterPendingShift(p)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-[11px] font-bold shadow-sm hover:from-teal-700 hover:to-emerald-700 active:scale-95 transition whitespace-nowrap"
+                                title="Apre la scheda turno in Consuntivo: inserisci orario effettivo di inizio e fine"
+                              >
+                                <Plus size={13} /> Registra Turno
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      {kpiShowCancelled && (
+          <div className="fixed inset-0 z-[90] bg-black/40 flex items-center justify-center p-4" onClick={() => setKpiShowCancelled(false)}>
+            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl ring-1 ring-slate-200 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800">Turni annullati</h3>
+                  <p className="text-xs text-slate-500 capitalize">{format(kpiMonth, 'MMMM yyyy', { locale: it })} · {cur.cancelledCount} turni · {cur.cancelledHours.toFixed(1)}h perse</p>
+                </div>
+                <button onClick={() => setKpiShowCancelled(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 shrink-0" title="Chiudi"><X size={18} /></button>
+              </div>
+              <div className="overflow-y-auto px-5 py-3">
+                {cur.cancelledShifts.length === 0 ? (
+                  <p className="text-center text-slate-400 italic py-8">Nessun turno annullato nel mese.</p>
+                ) : (
+                  <table className="w-full text-sm border-collapse whitespace-nowrap">
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="text-[10px] uppercase tracking-wide text-slate-500 border-b-2 border-slate-200">
+                        <th className="text-left py-2 pr-3 font-bold">Data</th>
+                        <th className="text-left py-2 pr-3 font-bold">Tutor</th>
+                        <th className="text-left py-2 pr-3 font-bold">Ragazzo/i</th>
+                        <th className="text-left py-2 pr-3 font-bold">Fascia</th>
+                        <th className="text-left py-2 font-bold">Attività</th>
+                        <th className="text-right py-2 font-bold">Azione</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cur.cancelledShifts.map(s => {
+                        const t = tutors.find(x => x.id === s.tutorId);
+                        const tc = getTutorColor(s.tutorId, tutors);
+                        const d = typeof s.date === 'string' ? s.date.split('T')[0] : s.date;
+                        return (
+                          <tr key={s.id} className="border-b border-slate-100 bg-rose-50/40">
+                            <td className="py-1.5 pr-3 font-semibold text-slate-700 capitalize">{format(parseISO(d), 'EEE d MMM', { locale: it })}</td>
+                            <td className="py-1.5 pr-3">
+                              <span className="inline-flex items-center gap-1.5">
+                                <button
+                                  onClick={(e) => goToTutorAgenda(t, e as unknown as React.MouseEvent)}
+                                  className={`h-5 w-5 rounded-full ${tc.bg} ${tc.text} text-[10px] font-bold flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-teal-400 transition`}
+                                  title={`Apri l'agenda di ${t?.name || 'tutor'}`}
+                                >
+                                  {getInitials(t?.name)}
+                                </button>
+                                <button
+                                  onClick={(e) => goToTutor(t, e as unknown as React.MouseEvent)}
+                                  className="max-w-[8rem] truncate font-medium cursor-pointer hover:text-teal-700 hover:underline"
+                                  title={`Apri scheda ${t?.name || 'tutor'}`}
+                                >
+                                  {t?.name || '—'}
+                                </button>
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <span className="flex flex-wrap gap-1">
+                                {shiftYouthIds(s).map(yid => {
+                                  const y = youths.find(x => x.id === yid);
+                                  const yc = getYouthColor(yid, youths);
+                                  return (
+                                    <button
+                                      key={yid}
+                                      onClick={(e) => goToYouth(y, e as unknown as React.MouseEvent)}
+                                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${yc.bg} ${yc.text} hover:ring-2 hover:ring-teal-400 cursor-pointer transition`}
+                                      title={`Apri scheda ${y?.name || 'ragazzo'}`}
+                                    >
+                                      {y?.name || '—'}
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 tabular-nums text-slate-600">{s.startTime}–{s.endTime}</td>
+                            <td className="py-1.5 font-medium text-slate-600 max-w-[10rem] truncate">{s.activity}</td>
+                            <td className="py-1.5 pl-3 text-right">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setKpiShowCancelled(false); openShiftModal(s, 'validate'); }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[11px] font-bold shadow-sm hover:from-rose-700 hover:to-pink-700 active:scale-95 transition whitespace-nowrap"
+                                title="Apre la scheda turno in Consuntivo: puoi riattivarlo o modificarne gli orari effettivi"
+                              >
+                                <ClipboardCheck size={13} /> Vai al consuntivo
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // --- Main Render ---
 
   if (view === 'LOGIN') {
@@ -7013,6 +7747,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             {view === 'TUTORS' && renderTutorsList()}
             {view === 'YOUTHS' && renderYouthsList()}
             {view === 'SUMMARY' && renderSummary()}
+            {view === 'OVERVIEW' && renderOverview()}
             {view === 'PAYROLL' && renderPayroll()}
             {view === 'GUIDE' && renderGuide()}
             {view === 'USER_MANAGEMENT' && <UserManagementView tutors={tutors} currentUser={currentUser} />}
@@ -7024,7 +7759,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
       {/* --- Modals --- */}
 
       {/* Confirm Delete Tutor Modal */}
-      <Modal isOpen={!!tutorToDelete} onClose={() => setTutorToDelete(null)} title="Elimina scheda tutor">
+      <Modal isOpen={!!tutorToDelete} onClose={() => setTutorToDelete(null)} title="Elimina scheda tutor" icon={<UserX size={20} />}>
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-red-100 rounded-full flex-shrink-0 mt-0.5">
@@ -7039,7 +7774,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex justify-end gap-3">
             <button
               onClick={() => setTutorToDelete(null)}
               className="px-4 py-2 text-sm font-medium text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -7057,7 +7792,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
       </Modal>
 
       {/* Confirm Delete Youth Modal */}
-      <Modal isOpen={!!youthToDelete} onClose={() => setYouthToDelete(null)} title="Elimina scheda ragazzo">
+      <Modal isOpen={!!youthToDelete} onClose={() => setYouthToDelete(null)} title="Elimina scheda ragazzo" icon={<Users size={20} />}>
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-red-100 rounded-full flex-shrink-0 mt-0.5">
@@ -7072,7 +7807,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex justify-end gap-3">
             <button
               onClick={() => setYouthToDelete(null)}
               className="px-4 py-2 text-sm font-medium text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -7090,13 +7825,33 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
       </Modal>
 
       {/* Shift Modal */}
-      <Modal isOpen={isShiftModalOpen} onClose={() => setIsShiftModalOpen(false)} title={editingShift?.id ? "Modifica Turno" : "Nuovo Turno"} size="lg">
+      <Modal
+        isOpen={isShiftModalOpen}
+        onClose={() => setIsShiftModalOpen(false)}
+        title={
+          shiftModalMode === 'plan'
+            ? (editingShift?.id ? 'Modifica Turno Pianificato' : 'Nuovo Turno Pianificato')
+            : (editingShift?.id ? 'Modifica Turno Consuntivo' : 'Nuovo Turno Consuntivo')
+        }
+        icon={shiftModalMode === 'plan' ? <CalendarPlus size={20} /> : <ClipboardCheck size={20} />}
+        size="lg"
+      >
         <div className="space-y-4">
+          {/* Nota esplicativa */}
+          <p className="text-xs text-slate-500 leading-snug -mt-1">
+            {shiftModalMode === 'plan'
+              ? (editingShift?.id
+                ? "Stai modificando un turno della settimana tipo: verrà ripetuto ogni settimana e la modifica si propagherà ai turni futuri già copiati in Consuntivo."
+                : "Stai creando un turno della settimana tipo: si ripeterà ogni settimana e verrà propagato ai Consuntivi futuri già materializzati.")
+              : (editingShift?.id
+                ? "Stai modificando un turno registrato in Consuntivo: qui puoi aggiornare data, tutor, ragazzi, orari effettivi di inizio/fine e stato."
+                : "Stai registrando un turno nel Consuntivo: compila data, fascia e tutor, poi inserisci gli orari effettivi di inizio e fine e conferma.")}
+          </p>
           {/* Header */}
           <div className="rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200">
-            <div className="h-2 bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-400"></div>
+            <div className={`h-2 ${shiftModalMode === 'plan' ? 'bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-400' : 'bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-400'}`}></div>
             <div className="flex items-center gap-4 px-5 py-4 bg-gradient-to-br from-slate-50 to-white">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center text-xl font-bold shadow-md shrink-0">
+              <div className={`w-14 h-14 rounded-2xl ${shiftModalMode === 'plan' ? 'bg-gradient-to-br from-teal-500 to-emerald-600' : 'bg-gradient-to-br from-blue-600 to-indigo-600'} text-white flex items-center justify-center text-xl font-bold shadow-md shrink-0`}>
                 {getInitials(tutors.find(t => t.id === editingShift?.tutorId)?.name)}
               </div>
               <div className="flex-1 min-w-0">
@@ -7104,12 +7859,12 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
                   {editingShift?.tutorId ? (
                     <button
                       onClick={(e) => goToTutor(tutors.find(t => t.id === editingShift!.tutorId), e as unknown as React.MouseEvent)}
-                      className="font-bold text-slate-800 hover:text-teal-700 hover:underline cursor-pointer truncate"
+                      className={`font-bold text-slate-800 hover:underline cursor-pointer truncate ${shiftModalMode === 'plan' ? 'hover:text-teal-700' : 'hover:text-blue-700'}`}
                       title="Apri scheda tutor"
                     >
                       {tutors.find(t => t.id === editingShift.tutorId)?.name || 'Tutor'}
                     </button>
-                  ) : 'Nuovo Turno'}
+                  ) : shiftModalMode === 'plan' ? 'Nuovo Turno Pianificato' : 'Nuovo Turno Consuntivo'}
                 </h3>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {(editingShift?.youthIds && editingShift.youthIds.length > 0 ? editingShift.youthIds : (editingShift?.youthId ? [editingShift.youthId] : [])).map(yid => {
@@ -7122,7 +7877,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
                     );
                   })}
                   {editingShift?.startTime && (
-                    <span className="px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 text-xs font-semibold tabular-nums">
+                    <span className={`px-2 py-0.5 rounded-full ${shiftModalMode === 'plan' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'} text-xs font-semibold tabular-nums`}>
                       {editingShift.startTime}–{editingShift.endTime}
                     </span>
                   )}
@@ -7137,7 +7892,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             </div>
           </div>
 
-          <YouthSection icon={<CalendarIcon size={16} />} title="Programmazione" chipBg="bg-teal-500" headerBg="bg-gradient-to-r from-teal-50 to-white border-teal-100" textColor="text-teal-700">
+          <YouthSection icon={<CalendarIcon size={16} />} title="Programmazione" chipBg={shiftModalMode === 'plan' ? 'bg-teal-500' : 'bg-blue-500'} headerBg={shiftModalMode === 'plan' ? 'bg-gradient-to-r from-teal-50 to-white border-teal-100' : 'bg-gradient-to-r from-blue-50 to-white border-blue-100'} textColor={shiftModalMode === 'plan' ? 'text-teal-700' : 'text-blue-700'}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-base font-medium text-slate-800 mb-1.5">Tutor <span className="text-red-500">*</span></label>
@@ -7172,7 +7927,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
                           />
                         </div>
                         {yi === 0 && (
-                          <span className="shrink-0 rounded bg-teal-100 text-teal-700 px-1.5 py-0.5 text-[10px] font-bold uppercase">Principale</span>
+                          <span className={`shrink-0 rounded ${shiftModalMode === 'plan' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 text-[10px] font-bold uppercase`}>Principale</span>
                         )}
                         <button
                           type="button"
@@ -7406,7 +8161,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             </YouthSection>
           )}
 
-          <div className="flex gap-3 pt-1">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex gap-3">
             {editingShift?.id && (
               <button onClick={() => handleDeleteShift(editingShift.id)} className="px-3 py-2.5 rounded-lg border border-red-200 bg-red-50 text-red-600 font-medium hover:bg-red-100 transition" title="Elimina definitivamente il turno">
                 <Trash2 size={16} />
@@ -7457,7 +8212,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
                 <Copy size={16} /> Duplica
               </button>
             )}
-            <button onClick={handleSaveShift} className="flex-[2] py-2.5 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold shadow-md hover:from-teal-700 hover:to-emerald-700 transition flex items-center justify-center gap-2">
+            <button onClick={handleSaveShift} className={`flex-[2] py-2.5 rounded-lg ${shiftModalMode === 'plan' ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'} text-white font-semibold shadow-md transition flex items-center justify-center gap-2`}>
               <Save size={16} /> Salva Turno
             </button>
           </div>
@@ -7465,13 +8220,13 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
       </Modal>
 
       {/* Tutor Modal */}
-      <Modal isOpen={isTutorModalOpen} onClose={() => setIsTutorModalOpen(false)} title={newTutor.id ? "Modifica Tutor" : "Nuovo Tutor"} size="xl">
+      <Modal isOpen={isTutorModalOpen} onClose={() => setIsTutorModalOpen(false)} title={newTutor.id ? "Modifica Tutor" : "Nuovo Tutor"} size="xl" icon={<UserCheck size={20} />}>
         <div className="space-y-4">
           {/* Header scheda */}
           <div className="rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200">
-            <div className="h-2 bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400"></div>
+            <div className="h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400"></div>
             <div className="flex items-center gap-4 px-5 py-4 bg-gradient-to-br from-slate-50 to-white">
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-md shrink-0 ${newTutor.id ? getTutorColor(newTutor.id, tutors).bg + ' ' + getTutorColor(newTutor.id, tutors).text : 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white'}`}>
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shadow-md shrink-0 ${newTutor.id ? getTutorColor(newTutor.id, tutors).bg + ' ' + getTutorColor(newTutor.id, tutors).text : 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'}`}>
                 {newTutor.name?.charAt(0)?.toUpperCase() || '?'}
               </div>
               <div className="flex-1 min-w-0">
@@ -7499,7 +8254,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             </div>
           </div>
 
-          <YouthSection icon={<IdCard size={16} />} title="Dati Personali" chipBg="bg-blue-500" headerBg="bg-gradient-to-r from-blue-50 to-white border-blue-100" textColor="text-blue-700">
+          <YouthSection icon={<IdCard size={16} />} title="Dati Personali" chipBg="bg-amber-500" headerBg="bg-gradient-to-r from-amber-50 to-white border-amber-100" textColor="text-amber-700">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="sm:col-span-2 lg:col-span-3">
                 <label className="block text-base font-medium text-slate-800 mb-1.5">Nome Completo <span className="text-red-500">*</span></label>
@@ -7853,11 +8608,11 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             </div>
           </YouthSection>
 
-          <div className="flex gap-3 pt-1">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex gap-3">
             <button onClick={() => setIsTutorModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50 transition">
               Annulla
             </button>
-            <button onClick={handleSaveTutor} className="flex-[2] py-2.5 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold shadow-md hover:from-teal-700 hover:to-emerald-700 transition flex items-center justify-center gap-2">
+            <button onClick={handleSaveTutor} className="flex-[2] py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-md hover:from-amber-600 hover:to-orange-700 transition flex items-center justify-center gap-2">
               <Save size={16} /> {newTutor.id ? "Salva Modifiche" : "Aggiungi Tutor"}
             </button>
           </div>
@@ -7865,7 +8620,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
       </Modal>
 
       {/* Youth Modal */}
-      <Modal isOpen={isYouthModalOpen} onClose={() => setIsYouthModalOpen(false)} title={newYouth.id ? "Modifica Ragazzo/a" : "Nuovo Ragazzo/a"} size="xl">
+      <Modal isOpen={isYouthModalOpen} onClose={() => setIsYouthModalOpen(false)} title={newYouth.id ? "Modifica Ragazzo/a" : "Nuovo Ragazzo/a"} size="xl" icon={<Users size={20} />}>
         <div className="space-y-4">
           {/* Header scheda */}
           <div className="rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200">
@@ -8205,7 +8960,7 @@ const BTN = "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-x
             </div>
           </YouthSection>
 
-          <div className="flex gap-3 pt-1">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex gap-3">
             <button onClick={() => setIsYouthModalOpen(false)} className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50 transition">
               Annulla
             </button>
@@ -8732,7 +9487,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
       </div>
 
       {/* Create User Modal */}
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Nuovo Utente">
+      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title="Nuovo Utente" icon={<UserPlus size={20} />}>
         <div className="space-y-4">
           <div>
             <label className="block text-base font-medium text-slate-800 mb-1.5">Username</label>
@@ -8777,7 +9532,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
               onAdminChange={(v) => setNewUser({ ...newUser, permissions: v ? ['ALL'] : [] })}
             />
           </div>
-          <div className="flex justify-end space-x-3 mt-6">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex justify-end space-x-3">
             <button onClick={() => setIsUserModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
             <button onClick={handleCreateUser} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Crea Utente</button>
           </div>
@@ -8785,7 +9540,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
       </Modal>
 
       {/* Edit Permissions Modal */}
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Modifica Permessi">
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Modifica Permessi" icon={<Shield size={20} />}>
         <div className="space-y-4">
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
             <p className="text-sm text-slate-600">
@@ -8865,7 +9620,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3 mt-6">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex justify-end space-x-3">
             <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Annulla</button>
             <button onClick={handleUpdatePermissions} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Salva Modifiche</button>
           </div>
@@ -8873,7 +9628,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
       </Modal>
 
       {/* Confirm Delete User Modal */}
-      <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} title="Elimina utente">
+      <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)} title="Elimina utente" icon={<UserX size={20} />}>
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-red-100 rounded-full flex-shrink-0 mt-0.5">
@@ -8888,7 +9643,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="sticky bottom-0 z-10 -mx-5 sm:-mx-7 px-5 sm:px-7 pt-4 pb-4 sm:pb-5 bg-white border-t border-slate-100 flex justify-end gap-3">
             <button
               onClick={() => setUserToDelete(null)}
               className="px-4 py-2 text-sm font-medium text-slate-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
@@ -8906,7 +9661,7 @@ function UserManagementView({ tutors, currentUser }: { tutors: Tutor[]; currentU
       </Modal>
 
       {/* Access Log Modal */}
-      <Modal isOpen={isAccessLogOpen} onClose={() => setIsAccessLogOpen(false)} title="Log Accessi" size="xl">
+      <Modal isOpen={isAccessLogOpen} onClose={() => setIsAccessLogOpen(false)} title="Log Accessi" size="xl" icon={<History size={20} />}>
         <div className="flex justify-between items-center mb-3">
           <p className="text-sm text-slate-500">
             Storico sessioni di accesso degli utenti, in ordine dal più vecchio al più recente
